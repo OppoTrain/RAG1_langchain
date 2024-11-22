@@ -1,0 +1,11 @@
+# Ignore the Chroma local folder
+chroma_local/
+
+# Ignore other unwanted files/folders
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.log
+*.sqlite3
+.env
