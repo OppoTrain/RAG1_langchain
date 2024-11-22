@@ -25,19 +25,14 @@ aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')  # Add your Access Key ID in .en
 aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')  # Add your Secret Access Key in .env
 region = os.getenv('AWS_REGION', 'eu-north-1')  # Default to Stockholm region if not provided
 bucket_name = os.getenv('S3_BUCKET_NAME', 'alaasbucket')  # Bucket name
-s3_folder_path = 'chroma/'  # Folder path in S3
+s3_folder_path = "chroma/"  # Folder path in S3
 
-# Local folder to download the Chroma DB
-local_folder_path = "chroma_local/"
-chroma_db_file = "chroma.sqlite3"
-chroma_db_path = os.path.join(local_folder_path, chroma_db_file)
+# Local directory to store downloaded files (changed the name to download_directory)
+download_directory = "chroma_local/"  # Changed the name
 
-# Ensure the folder exists
-if not os.path.exists(local_folder_path):
-    os.makedirs(local_folder_path)
-
-# Initialize the embedding model
-embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+# Ensure the local directory exists
+if not os.path.exists(download_directory):
+    os.makedirs(download_directory)
 
 # Initialize the S3 client
 s3_client = boto3.client(
@@ -47,39 +42,58 @@ s3_client = boto3.client(
     region_name=region
 )
 
-# List and download Chroma files from S3
 def download_chroma_from_s3():
+    """
+    Downloads all files from the specified S3 folder to the local directory.
+    Ensures files are downloaded only if they do not exist or are incomplete.
+    """
     try:
-        # List objects in the S3 folder
+        # List all objects in the specified S3 folder
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=s3_folder_path)
+        
+        if "Contents" not in response or len(response["Contents"]) == 0:
+            print("No files found in the specified S3 folder.")
+            return
+        
+        print(f"Found {len(response['Contents'])} objects in S3 under the path: {s3_folder_path}")
 
-        # Download each file
-        for obj in response.get("Contents", []):
+        # Iterate through the objects and download each file
+        for obj in response["Contents"]:
             s3_file_key = obj["Key"]
-            local_file_path = os.path.join(local_folder_path, os.path.relpath(s3_file_key, s3_folder_path))
-            
-            # Create local directories if necessary
+            if s3_file_key.endswith("/"):
+                # Skip directories
+                continue
+
+            # Create the local file path
+            local_file_path = os.path.join(download_directory, os.path.relpath(s3_file_key, s3_folder_path))
+
+            # Ensure the local directory exists
             local_dir = os.path.dirname(local_file_path)
             if not os.path.exists(local_dir):
                 os.makedirs(local_dir)
 
-            # Download the file if it does not already exist
-            if not os.path.exists(local_file_path):
-                print(f"Downloading {s3_file_key} to {local_file_path}")
+            # Check if the file exists and has the correct size
+            if not os.path.exists(local_file_path) or os.path.getsize(local_file_path) != obj["Size"]:
+                print(f"Downloading {s3_file_key} to {local_file_path}...")
                 s3_client.download_file(bucket_name, s3_file_key, local_file_path)
 
-                # Check if the file was downloaded successfully
-                if os.path.exists(local_file_path):
-                    print(f"Successfully downloaded {s3_file_key} to {local_file_path}")
+                # Verify the file size after download
+                if os.path.exists(local_file_path) and os.path.getsize(local_file_path) == obj["Size"]:
+                    print(f"Successfully downloaded {s3_file_key}.")
                 else:
-                    print(f"Failed to download {s3_file_key}")
+                    print(f"Failed to download {s3_file_key}. File may be incomplete.")
             else:
-                print(f"File {local_file_path} already exists. Skipping download.")
-
+                print(f"File {local_file_path} already exists and is up-to-date. Skipping download.")
     except Exception as e:
-        print(f"Error while downloading Chroma from S3: {e}")
+        print(f"Error while downloading from S3: {e}")
+
+# Initialize the embedding model
+embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 
 # Check if the Chroma database exists locally
+chroma_db_file = "chroma.sqlite3"
+chroma_db_path = os.path.join(download_directory, chroma_db_file)
+
 def ensure_chroma_exists():
     if not os.path.exists(chroma_db_path):
         # If the Chroma database is not found, download it from S3
@@ -92,10 +106,12 @@ def ensure_chroma_exists():
     else:
         print(f"Chroma database already exists at {chroma_db_path}, using the existing database.")
 
-# Update the persist directory to target only the directory
-persist_directory = local_folder_path  # Set to 'chroma_local/'
-chroma_db = Chroma(persist_directory=persist_directory, embedding_function=embedding_model)
+# Ensure Chroma DB exists
+ensure_chroma_exists()
 
+# Initialize the Chroma database
+persist_directory = download_directory  # Set to 'chroma_local/'
+chroma_db = Chroma(persist_directory=persist_directory, embedding_function=embedding_model)
 
 # Define request model for the query
 class Query(BaseModel):
