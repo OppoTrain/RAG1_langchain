@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+langchain
+chromadb
+sentence-transformers
+huggingface-hub
+langdetect
+beautifulsoup4
+requests
+langchain-together
+pyngrok
+nest-asyncio
+langchain-community
+langchain-chroma
+python-dotenv
+boto3
