@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-langchain
+langchain==0.3.8
 chromadb
 sentence-transformers
 huggingface-hub
@@ -14,3 +14,4 @@ langchain-community
 langchain-chroma
 python-dotenv
 boto3
+langchain-huggingface

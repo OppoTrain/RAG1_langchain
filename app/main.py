@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain.prompts import PromptTemplate
 from langchain_together import Together
@@ -10,6 +10,8 @@ import os
 import boto3
 # Disable oneDNN optimizations in TensorFlow
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -119,27 +121,20 @@ class Query(BaseModel):
 
 # Define function to clean and format the answers
 def clean_and_format_answers(answers):
+    import re  # Ensure re is imported
     clean_html = re.compile('<.*?>')
     cleaned_text = ""
     for answer in answers:
         cleaned_text += f"Question: {answer['question']}\n\n"
         for doc in answer['relevant_documents']:
-            cleaned_doc = re.sub(clean_html, '', doc)  # Clean HTML tags
-            cleaned_text += f"{cleaned_doc.strip()}\n\n"
+            if isinstance(doc, str):  # Ensure it's a string before processing
+                cleaned_doc = re.sub(clean_html, '', doc)  # Clean HTML tags
+                cleaned_text += f"{cleaned_doc.strip()}\n\n"
+            else:
+                # Log or skip non-string documents
+                print(f"Non-string document found: {doc}")
+                cleaned_text += "[Non-text document skipped]\n\n"
     return cleaned_text.strip()
-
-# Endpoint for retrieving answers from Chroma
-@app.post("/retrieve/")  # Example: POST /retrieve/
-async def retrieve_answer(query: Query):
-    try:
-        retriever = chroma_db.as_retriever(search_type="similarity", k=4, relevance_score_threshold=0.55)
-        results = retriever.get_relevant_documents(query.question)
-        relevant_docs = [result.page_content for result in results]
-        answers = [{"question": query.question, "relevant_documents": relevant_docs}]
-        cleaned_text = clean_and_format_answers(answers)
-        return {"retrieved_text": cleaned_text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint for synthesizing a response using the LLM
 @app.post("/synthesize/")  # Example: POST /synthesize/
