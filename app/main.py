@@ -119,60 +119,112 @@ chroma_db = Chroma(persist_directory=persist_directory, embedding_function=embed
 class Query(BaseModel):
     question: str
 
-# Define function to clean and format the answers
 def clean_and_format_answers(answers):
-    import re  # Ensure re is imported
     clean_html = re.compile('<.*?>')
     cleaned_text = ""
+    
     for answer in answers:
-        cleaned_text += f"Question: {answer['question']}\n\n"
-        for doc in answer['relevant_documents']:
-            if isinstance(doc, str):  # Ensure it's a string before processing
-                cleaned_doc = re.sub(clean_html, '', doc)  # Clean HTML tags
-                cleaned_text += f"{cleaned_doc.strip()}\n\n"
-            else:
-                # Log or skip non-string documents
-                print(f"Non-string document found: {doc}")
-                cleaned_text += "[Non-text document skipped]\n\n"
+        # Add only the most relevant parts
+        for i, doc in enumerate(answer['relevant_documents']):
+            if isinstance(doc, str):
+                cleaned_doc = re.sub(clean_html, '', doc)
+                cleaned_doc = cleaned_doc.strip()
+                
+                # Add only if the document contains relevant keywords
+                keywords = answer['question'].lower().split()
+                if any(keyword in cleaned_doc.lower() for keyword in keywords):
+                    cleaned_text += f"Document {i+1}:\n{cleaned_doc}\n\n"
+    
     return cleaned_text.strip()
+# Define function to create retriever
+def create_retriever(chroma_db, search_type="similarity", threshold=0.55, k=4, lambda_mult=0.25):
+    retriever = chroma_db.as_retriever(
+        search_type=search_type,
+        relevance_score_threshold=threshold,
+        k=k,
+        lambda_mult=lambda_mult
+    )
+    return retriever
 
-# Endpoint for synthesizing a response using the LLM
-@app.post("/synthesize/")  # Example: POST /synthesize/
+def truncate_and_format_context(cleaned_text, max_length=3000):
+    """
+    Truncates and formats the context to a manageable length while preserving the most relevant information.
+    """
+    # Split into sentences
+    sentences = cleaned_text.split('\n')
+    formatted_text = []
+    current_length = 0
+    
+    for sentence in sentences:
+        if current_length + len(sentence) <= max_length:
+            formatted_text.append(sentence)
+            current_length += len(sentence)
+        else:
+            break
+            
+    return '\n'.join(formatted_text)
+
+@app.post("/synthesize/")
 async def synthesize_response(query: Query):
     try:
         llm = Together(
             model="meta-llama/Llama-2-13b-chat-hf",
             together_api_key=together_key,
-            temperature=0.1,
-            max_tokens=800  # Explicitly set max_tokens
+            temperature=0.7,
+            max_tokens=512,
+            top_p=0.9,
+            top_k=50,
+            repetition_penalty=1.1
         )
-        retriever = chroma_db.as_retriever(search_type="similarity", k=4, relevance_score_threshold=0.55)
+
+        # Get relevant documents with smaller k value
+        retriever = create_retriever(chroma_db, search_type="similarity", threshold=0.55, k=4, lambda_mult=0.25)
         results = retriever.get_relevant_documents(query.question)
+        
+        # Process documents
         relevant_docs = [result.page_content for result in results]
-        answers = [{"question": query.question, "relevant_documents": relevant_docs}]
-        cleaned_text = clean_and_format_answers(answers)
+        
+        if relevant_docs:
+            # Use retrieved documents to build the context
+            answers = [{"question": query.question, "relevant_documents": relevant_docs}]
+            cleaned_text = clean_and_format_answers(answers)
+            truncated_context = truncate_and_format_context(cleaned_text)
+            
+            # Prompt for questions with relevant context
+            prompt = PromptTemplate(
+                input_variables=["context", "question"],
+                template="""Based on the question and the document received, provide a comprehensive and complete answer.
+                Context:
+                {context}
+                Question: {question}
+                Provide a focused answer using only the information from the given context.
+                AI:
+                """
+            )
+            
+            formatted_prompt = prompt.format(
+                context=truncated_context,
+                question=query.question
+            )
+        else:
+            # Fallback prompt for questions without relevant documents
+            formatted_prompt = f"""
+            The question is: "{query.question}"
+            Unfortunately, I couldn't find any reference material related to your query.
+            However, based on general knowledge, here is an attempt to answer your question:
+            """
 
-        # Debug: Print the cleaned_text
-        print("Cleaned Text:", cleaned_text)
-
-        # Define the prompt for the LLM
-        prompt = PromptTemplate(
-            input_variables=["history", "input"],
-            template = """
-                This is a conversation between a human and an AI assistant familiar with human rights.
-                {history}
-                Human: I will provide a text from the retrieved documents and the question asked. Please formulate a coherent response based on the information provided.
-                Be sure to highlight all important aspects of human rights mentioned in the text.
-                If specific articles or laws related to human rights are mentioned in the text, please refer to them explicitly.
-                In addition, be neutral in any response and make your primary reference the retrieved documents that I will send you.
-                If sources are available, please refer to the documents appropriately.
-                Text from the retrieved documents and the question asked:
-                {input}
-                AI:"""
-        )
-        history = ""
-        formatted_prompt = prompt.format(history=history, input=cleaned_text)
+        print(f"Formatted Prompt: {formatted_prompt}")
+        print(f"Context length: {len(formatted_prompt)}")
+        
+        # Invoke the LLM with the appropriate prompt
         response = llm.invoke(formatted_prompt)
+        
+        if not response or len(response.strip()) < 5:
+            return {"response": "The model returned an insufficient response. Please try again."}
+            
         return {"response": response}
+    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error in synthesize_response: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
