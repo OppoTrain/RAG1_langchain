@@ -15,3 +15,4 @@ langchain-chroma
 python-dotenv
 boto3
 langchain-huggingface
+streamlit

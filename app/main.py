@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 import re
 import os
 import boto3
+from langchain.text_splitter import CharacterTextSplitter
+
 # Disable oneDNN optimizations in TensorFlow
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
@@ -164,14 +166,19 @@ def truncate_and_format_context(cleaned_text, max_length=3000):
             
     return '\n'.join(formatted_text)
 
+def truncate_context(context, max_length=3000):
+    splitter = CharacterTextSplitter(chunk_size=max_length, chunk_overlap=100)
+    return splitter.split_text(context)[0]
+
+
 @app.post("/synthesize/")
 async def synthesize_response(query: Query):
     try:
         llm = Together(
             model="meta-llama/Llama-2-13b-chat-hf",
             together_api_key=together_key,
-            temperature=0.7,
-            max_tokens=512,
+            temperature=0.3,
+            max_tokens=3000,
             top_p=0.9,
             top_k=50,
             repetition_penalty=1.1
@@ -188,8 +195,8 @@ async def synthesize_response(query: Query):
             # Use retrieved documents to build the context
             answers = [{"question": query.question, "relevant_documents": relevant_docs}]
             cleaned_text = clean_and_format_answers(answers)
-            truncated_context = truncate_and_format_context(cleaned_text)
-            
+            cleaned_text_tt = truncate_and_format_context(cleaned_text)
+
             # Prompt for questions with relevant context
             prompt = PromptTemplate(
                 input_variables=["context", "question"],
@@ -203,7 +210,7 @@ async def synthesize_response(query: Query):
             )
             
             formatted_prompt = prompt.format(
-                context=truncated_context,
+                context=cleaned_text_tt,
                 question=query.question
             )
         else:
