@@ -1,34 +1,34 @@
-# Ignore Python cache files
+
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Ignore virtual environments
+
 env/
 .venv/
 
-# Ignore log files
+
 *.log
 
-# Ignore sensitive configuration files
+
 .env
 
-# Ignore Chroma local folder (to avoid large files being copied)
+
 chroma_local/
 
-# Ignore SQLite database files
+
 *.sqlite3
 
-# Ignore git-related files and directories
+
 .git/
 .gitignore
 
-# Ignore unnecessary IDE files
+
 *.vscode/
 .idea/
 *.swp
 
-# Ignore any other temporary or backup files
+
 *~
 *.bak

@@ -1,17 +1,11 @@
 import streamlit as st
 import requests
-
-# Title of the application
 st.title("RAGgyBot")
-
-# Header
 st.header("Welcome to RAGgyBot - Your Intelligent Assistant")
 
-# Initialize session state to store messages if not already initialized
 if 'messages' not in st.session_state:
     st.session_state['messages'] = []
 
-# Function to interact with the FastAPI backend
 def get_response_from_api(user_message):
     """
     Sends the user's message to the FastAPI backend and retrieves the chatbot's response.
@@ -35,32 +29,25 @@ def get_response_from_api(user_message):
     except Exception as e:
         return f"An error occurred: {str(e)}"
 
-# Input from the user
 user_input = st.text_input("Ask RAG:")
 
-# Button interaction
 if st.button("Get Answer"):
     if user_input:
-        # Add user's message to the session state
         st.session_state['messages'].append(f"You: {user_input}")
-
-        # Get the chatbot's response from the FastAPI backend
         bot_response = get_response_from_api(user_input)
-
-        # Add chatbot's response to the session state
         st.session_state['messages'].append(f"RAGgyBot: {bot_response}")
     else:
         st.error("Please enter a valid question.")
 
-# Display the chat messages
+
 st.subheader("Conversation History")
 for message in st.session_state['messages']:
     if message.startswith("You:"):
-        st.markdown(f"**{message}**")  # Format user messages
+        st.markdown(f"**{message}**")  
     else:
-        st.markdown(f"*{message}*")  # Format chatbot responses
+        st.markdown(f"*{message}*")  
 
-# Sidebar options for additional features
+
 st.sidebar.title("Sidebar Options")
 option = st.sidebar.selectbox("Choose an option:", ["Home", "About", "Contact"])
 
@@ -71,7 +58,6 @@ elif option == "About":
 elif option == "Contact":
     st.sidebar.write("Contact us at RAGgyBot@gmail.com.")
 
-# Footer text with colorful gradient using HTML
 footer_html = """
     <p style="font-size: 16px; font-weight: bold; background: linear-gradient(to left, #FF6347, #FF4500, #FFD700, #32CD32, #1E90FF); 
     -webkit-background-clip: text; color: transparent;">
