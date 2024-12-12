@@ -1,0 +1,25 @@
+services:
+  fastapi:
+    build: ./fastapi
+    container_name: fastapi
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./fastapi/.env
+    networks:
+      - backend
+
+  streamlit:
+    build: ./streamlit
+    container_name: streamlit
+    ports:
+      - "8501:8501"
+    depends_on:
+      - fastapi
+    networks:
+      - backend
+    entrypoint: ["./wait-for-it.sh", "fastapi:8000", "--", "streamlit", "run", "streamlit_app.py"]
+
+networks:
+  backend:
+    driver: bridge
