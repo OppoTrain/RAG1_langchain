@@ -145,11 +145,6 @@ def truncate_and_format_context(cleaned_text, max_length=3000):
             
     return '\n'.join(formatted_text)
 
-def truncate_context(context, max_length=3000):
-    splitter = CharacterTextSplitter(chunk_size=max_length, chunk_overlap=100)
-    return splitter.split_text(context)[0]
-
-
 @app.post("/synthesize/")
 async def synthesize_response(query: Query):
     try:
@@ -171,7 +166,6 @@ async def synthesize_response(query: Query):
         if relevant_docs:
             answers = [{"question": query.question, "relevant_documents": relevant_docs}]
             cleaned_text = clean_and_format_answers(answers)
-            cleaned_text_tt = truncate_and_format_context(cleaned_text)
 
             prompt = PromptTemplate(
                 input_variables=["context", "question"],
@@ -185,7 +179,7 @@ async def synthesize_response(query: Query):
             )
             
             formatted_prompt = prompt.format(
-                context=cleaned_text_tt,
+                context=cleaned_text,
                 question=query.question
             )
         else:
