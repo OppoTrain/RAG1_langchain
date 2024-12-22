@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import re
 import os
 import boto3
+import uvicorn
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
@@ -202,3 +203,6 @@ async def synthesize_response(query: Query):
     except Exception as e:
         print(f"Error in synthesize_response: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
