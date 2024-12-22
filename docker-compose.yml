@@ -1,11 +1,13 @@
+version: '3'
+
 services:
   fastapi:
-    build: ./fastapi
+    build: ./app  # Build from the 'app' directory now
     container_name: fastapi
     ports:
       - "8000:8000"
     env_file:
-      - ./fastapi/.env
+      - ./app/.env
     networks:
       - backend
 

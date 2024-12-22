@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 import re
 import os
 import boto3
-from langchain.text_splitter import CharacterTextSplitter
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
