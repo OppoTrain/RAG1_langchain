@@ -8,13 +8,12 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libopenblas-dev \
     libomp-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    apt-get remove -y build-essential && apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
-
-RUN pip install -r requirements.txt
-
-RUN pip install tf-keras
+ENV TF_ENABLE_ONEDNN_OPTS=0
 
 EXPOSE 8000
 

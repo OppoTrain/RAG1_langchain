@@ -1,13 +1,14 @@
 version: '3'
 
 services:
-  fastapi:
-    build: ./app  # Build from the 'app' directory now
-    container_name: fastapi
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     env_file:
-      - ./app/.env
+      - ./app/.env  
     networks:
       - backend
 

@@ -26,5 +26,5 @@ Thumbs.db
 *.swo
 
 
-fastapi/.env
+app/.env
 streamlit/.env

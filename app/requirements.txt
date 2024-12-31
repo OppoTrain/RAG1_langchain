@@ -4,7 +4,7 @@ langchain==0.3.8
 sentence-transformers
 huggingface-hub
 requests
-langchain-together
+together
 pyngrok
 nest-asyncio
 langchain-community

@@ -1,7 +1,7 @@
 import requests
 
 url = "http://127.0.0.1:8000/synthesize/"
-payload = {"question": "What protections are available under international law?"}
+payload = {"question":"What color is the sky at night if the moon were made of cheese?"}
 try:
     response = requests.post(url, json=payload)
     if response.status_code == 200:

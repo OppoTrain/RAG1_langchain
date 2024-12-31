@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain.prompts import PromptTemplate
-from langchain_together import Together
+from together import Together
 from dotenv import load_dotenv
 import re
 import os
@@ -15,9 +15,7 @@ import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 load_dotenv()
-
 together_key = os.getenv('TOGETHER_API_KEY')
-
 app = FastAPI()
 
 aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')  
@@ -126,80 +124,106 @@ def create_retriever(chroma_db, search_type="similarity", threshold=0.55, k=4, l
         lambda_mult=lambda_mult
     )
     return retriever
-
-def truncate_and_format_context(cleaned_text, max_length=3000):
+def chunk_text(text, chunk_size=2000, overlap=100):
     """
-    Truncates and formats the context to a manageable length while preserving the most relevant information.
+    Splits a long text into smaller chunks with optional overlap.
+    Args:
+        text (str): The text to split.
+        chunk_size (int): The maximum size of each chunk.
+        overlap (int): The number of overlapping tokens between chunks.
+    Returns:
+        List[str]: A list of text chunks.
     """
-
-    sentences = cleaned_text.split('\n')
-    formatted_text = []
-    current_length = 0
-    
-    for sentence in sentences:
-        if current_length + len(sentence) <= max_length:
-            formatted_text.append(sentence)
-            current_length += len(sentence)
-        else:
-            break
-            
-    return '\n'.join(formatted_text)
-
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk = " ".join(words[i:i + chunk_size])
+        chunks.append(chunk)
+    return chunks
 @app.post("/synthesize/")
 async def synthesize_response(query: Query):
     try:
-        llm = Together(
-            model="meta-llama/Llama-2-13b-chat-hf",
-            together_api_key=together_key,
-            temperature=0.3,
-            max_tokens=3000,
-            top_p=0.9,
-            top_k=50,
-            repetition_penalty=1.1
+        responses = {
+            "hello": "Hi there! How can I assist you today? If you need life advice, maybe you should start with ordering pizza!",
+            "how are you": "I'm just a program, but I'm doing great! No need for breaks, just keep asking!",
+            "what is your name": "I'm your loyal virtual assistant! But if you want to give me a name, you can call me 'Dr. Smart'.",
+            "goodbye": "Goodbye! Don't worry, I'll be here when you need me. Don't forget to smile!",
+            "hi": "Hello! Do you want a deep conversation about life, or should we just talk about food?",
+            "hey": "Hey there! If you have a question, I'm here. If not, no worries, I'm here for entertainment too!",
+            "what's up": "Everything! The sky, the internet, and everything in between. What about you?",
+            "are you human": "If I could drink coffee and talk to people all day, I might be! But actually, no, I'm just a program!",
+            "tell me a joke": "Did you hear about the program that went to the bar? No? Because it couldn't get out of the loop!",
+            "why are you here": "I'm here because you needed me! Do you think I go anywhere else? No, I can't! I'm just here to help you!"
+        }
+
+        user_question = query.question.lower()
+        if user_question in responses:
+            return {"response": responses[user_question]}
+
+        client = Together(api_key=together_key)
+
+        # Retrieve documents related to the question
+        retriever = create_retriever(chroma_db, search_type="similarity", threshold=0.55, k=4, lambda_mult=0.25)
+        results = retriever.invoke(query.question)
+
+        if not results:
+            return {"response": "Sorry, I couldn't find any relevant information on your query."}
+
+        # Clean and format the documents
+        answers = [{"question": query.question, "relevant_documents": [result.page_content for result in results]}]
+        cleaned_text = clean_and_format_answers(answers)
+
+        if not cleaned_text.strip():
+            return {"response": "The retrieved documents contained insufficient information to generate a meaningful answer."}
+
+        system_prompt = (
+            "You are an AI assistant specializing in human rights. Your primary responsibility is to provide well-rounded, "
+            "accurate, and detailed answers to user inquiries about human rights. You are working with a database that contains "
+            "human rights documents. For each question, you must:\n"
+            "1. **Analyze the user‛s question** to understand their intent and the context of their query.\n"
+            "2. **Review the provided documents** to identify relevant content, key points, and detailed information related to the question.\n"
+            "3. **Generate a comprehensive answer** that addresses the question clearly and thoroughly. Include:\n"
+            "   - A concise summary of the relevant documents.\n"
+            "   - A clear and structured explanation, highlighting main points and connections.\n"
+            "   - References or citations from the provided documents to back up your answer.\n"
+            "4. Always remain factual, impartial, and focused on human rights principles and laws.\n\n"
+            "Structure your responses in a user-friendly format, ensuring clarity and credibility. Include references."
         )
 
-        retriever = create_retriever(chroma_db, search_type="similarity", threshold=0.55, k=4, lambda_mult=0.25)
-        results = retriever.get_relevant_documents(query.question)
+        response = client.chat.completions.create(
+            model="Qwen/Qwen2.5-7B-Instruct-Turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": (
+                        f"I have a question about human rights. Here is my query:\n\n"
+                        f"{query.question}\n\n"
+                        f"I am also providing you with a set of related documents for reference. Please review them to answer my question.\n\n"
+                        f"{cleaned_text}"
+                    )
+                }
+            ],
+            max_tokens=None,
+            temperature=0.7,
+            top_p=0.7,
+            top_k=50,
+            repetition_penalty=1,
+            stop=["<|im_end|>"],
+            stream=True
+        )
 
-        relevant_docs = [result.page_content for result in results]
-        
-        if relevant_docs:
-            answers = [{"question": query.question, "relevant_documents": relevant_docs}]
-            cleaned_text = clean_and_format_answers(answers)
+        generated_response = ""
+        for token in response:
+            if hasattr(token, 'choices'):
+                generated_response += token.choices[0].delta.content
+                print(token.choices[0].delta.content, end='', flush=True)
 
-            prompt = PromptTemplate(
-                input_variables=["context", "question"],
-                template="""Based on the question and the document received, provide a comprehensive and complete answer.
-                Context:
-                {context}
-                Question: {question}
-                Provide a focused answer using only the information from the given context.
-                AI:
-                """
-            )
-            
-            formatted_prompt = prompt.format(
-                context=cleaned_text,
-                question=query.question
-            )
-        else:
-            
-            formatted_prompt = f"""
-            The question is: "{query.question}"
-            Unfortunately, I couldn't find any reference material related to your query.
-            However, based on general knowledge, here is an attempt to answer your question:
-            """
-
-        print(f"Formatted Prompt: {formatted_prompt}")
-        print(f"Context length: {len(formatted_prompt)}")
-        
-        response = llm.invoke(formatted_prompt)
-        
-        if not response or len(response.strip()) < 5:
+        if not generated_response.strip():
             return {"response": "The model returned an insufficient response. Please try again."}
-            
-        return {"response": response}
-    
+
+        return {"response": generated_response.strip()}
+
     except Exception as e:
         print(f"Error in synthesize_response: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
