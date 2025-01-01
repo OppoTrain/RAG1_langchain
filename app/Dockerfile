@@ -1,20 +1,18 @@
-FROM python:3.11-slim
+# Base Image
+FROM python:3.9-slim
 
+# Set working directory
 WORKDIR /app
 
-COPY . /app
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libopenblas-dev \
-    libomp-dev \
-    && pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    apt-get remove -y build-essential && apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
+# Copy application code
+COPY . .
 
-ENV TF_ENABLE_ONEDNN_OPTS=0
-
+# Expose port for FastAPI
 EXPOSE 8000
 
+# Command to run FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
