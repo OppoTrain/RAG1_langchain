@@ -9,7 +9,7 @@ if 'messages' not in st.session_state:
 
 def get_response_from_api(user_message):
     try:
-        url = "http://3.89.229.219:8000/synthesize/"
+        url = "http://18.208.173.227:8000/synthesize/"
         payload = {"question": user_message}
         headers = {"Content-Type": "application/json"}
         response = requests.post(url, json=payload, headers=headers)
