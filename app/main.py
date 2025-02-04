@@ -9,6 +9,7 @@ import re
 import os
 import boto3
 import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
@@ -17,6 +18,19 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 load_dotenv()
 together_key = os.getenv('TOGETHER_API_KEY')
 app = FastAPI()
+
+origins = [
+    "http://localhost:3000",  
+    "http://127.0.0.1:3000",  
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')  
 aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')  
