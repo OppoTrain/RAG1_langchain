@@ -20,9 +20,11 @@ together_key = os.getenv('TOGETHER_API_KEY')
 app = FastAPI()
 
 origins = [
-    "http://localhost:3000",  
-    "http://127.0.0.1:3000",  
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+ "https://humanai.quest",
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
